@@ -1,0 +1,212 @@
+workflow:
+  rules:
+    - if: '$CI_MERGE_REQUEST_TITLE =~ /^WIP:.*/'
+      when: never
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_TAG
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+stages:
+  - buildimage
+  - format
+  - build_and_test
+  - build_static
+
+buildimage_build_container:
+  stage: buildimage
+  image: docker:18.09.6
+  services:
+    - docker:18.09.6-dind
+
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - ci/BuildContainer.dockerfile
+        - .gitlab-ci.yml
+      when: always
+      allow_failure: true
+
+  before_script:
+    # docker login asks for the password to be passed through stdin for security
+    # we use $CI_REGISTRY_PASSWORD here which is a special variable provided by GitLab
+    # https://docs.gitlab.com/ce/ci/variables/predefined_variables.html
+    - echo -n $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin registry.gitlab.hpi.de
+
+  script:
+    - >
+      docker build
+      --pull
+      --cache-from registry.gitlab.hpi.de/beb/doom/build:latest
+      --tag registry.gitlab.hpi.de/beb/doom/build:latest
+      -f ci/BuildContainer.dockerfile
+      .
+    - docker push registry.gitlab.hpi.de/beb/doom/build:latest
+
+buildimage_format_container:
+  stage: buildimage
+  image: docker:18.09.6
+  services:
+    - docker:18.09.6-dind
+
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - ci/FormattingContainer.dockerfile
+        - .gitlab-ci.yml
+      when: always
+      allow_failure: true
+
+  before_script:
+    # docker login asks for the password to be passed through stdin for security
+    # we use $CI_REGISTRY_PASSWORD here which is a special variable provided by GitLab
+    # https://docs.gitlab.com/ce/ci/variables/predefined_variables.html
+    - echo -n $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin registry.gitlab.hpi.de
+
+  script:
+    - >
+      docker build
+      --pull
+      --cache-from registry.gitlab.hpi.de/beb/doom/formatting:latest
+      --tag registry.gitlab.hpi.de/beb/doom/formatting:latest
+      -f ci/FormattingContainer.dockerfile
+      .
+    - docker push registry.gitlab.hpi.de/beb/doom/formatting:latest
+
+check_formatting:
+  image: registry.gitlab.hpi.de/beb/doom/formatting:latest
+  stage: format
+  script:
+    - cd "$CI_PROJECT_DIR"
+    - export CLANG_FORMAT_DIRS="src/ test/"
+    # No quotes around CLANG_FORMAT DIRS to explicitly split
+    - linter_errors=$(git-clang-format-11 -q --diff --style file --extensions c,cc,cpp,cxx,h  $CLANG_FORMAT_DIRS| grep -v --color=never "no modified files to format" || true)
+    - echo "$linter_errors"
+    - if [ ! -z "$linter_errors" ]; then echo "Detected formatting issues; please fix"; exit 1; else echo "Formatting is correct"; exit 0; fi
+
+build_and_test_quick:
+  stage: build_and_test
+  image: registry.gitlab.hpi.de/beb/doom/build
+  before_script:
+    - export CCACHE_BASEDIR="$PWD"
+    - export CCACHE_DIR="$PWD/ccache"
+    - export CCACHE_COMPILERCHECK=content
+    - ccache --zero-stats || true
+    - ccache --show-stats || true
+  script:
+    - cmake -S . -B build -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+    - cmake --build build -j4
+    - cd build && ctest -VV --output-on-failure
+  after_script:
+    - export CCACHE_DIR="$PWD/ccache"
+    - ccache --show-stats
+  parallel:
+    matrix:
+      - CC: gcc
+        CXX: g++
+        BUILD_TYPE: [Debug, Release]
+      - CC: clang
+        CXX: clang++
+        BUILD_TYPE: [Debug, Release]
+  cache:
+    - key: build_dependencies
+      paths:
+        - build/_deps/
+    - key: build_cache
+      paths:
+        - ccache/
+  artifacts:
+    paths:
+      - build/src/doom
+
+build_and_test_debug_full:
+  stage: build_and_test
+  image: registry.gitlab.hpi.de/beb/doom/build
+  before_script:
+    - export CCACHE_BASEDIR="$PWD"
+    - export CCACHE_DIR="$PWD/ccache"
+    - export CCACHE_COMPILERCHECK=content
+    - ccache --zero-stats || true
+    - ccache --show-stats || true
+  script:
+    - cmake -S . -B build -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DALWAYS_ENABLE_EXPENSIVE_TESTS=ON
+    - cmake --build build -j4
+    - cd build && ctest -VV --output-on-failure
+  after_script:
+    - export CCACHE_DIR="$PWD/ccache"
+    - ccache --show-stats
+  parallel:
+    matrix:
+      - CC: gcc
+        CXX: g++
+        BUILD_TYPE: Debug
+      - CC: clang
+        CXX: clang++
+        BUILD_TYPE: Debug
+  cache:
+    - key: build_dependencies
+      paths:
+        - build/_deps/
+    - key: build_cache
+      paths:
+        - ccache/
+  artifacts:
+    paths:
+      - build/src/doom
+  allow_failure: true
+  when: manual
+
+buildimage_static_container:
+  stage: buildimage
+  image: docker:18.09.6
+  services:
+    - docker:18.09.6-dind
+
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - ci/BuildStaticContainer.dockerfile
+        - .gitlab-ci.yml
+      when: always
+      allow_failure: true
+
+  before_script:
+    # docker login asks for the password to be passed through stdin for security
+    # we use $CI_REGISTRY_PASSWORD here which is a special variable provided by GitLab
+    # https://docs.gitlab.com/ce/ci/variables/predefined_variables.html
+    - echo -n $CI_REGISTRY_PASSWORD | docker login -u $CI_REGISTRY_USER --password-stdin registry.gitlab.hpi.de
+
+  script:
+    - >
+      docker build
+      --pull
+      --cache-from registry.gitlab.hpi.de/beb/doom/static:latest
+      --tag registry.gitlab.hpi.de/beb/doom/static:latest
+      -f ci/BuildStaticContainer.dockerfile
+      .
+    - docker push registry.gitlab.hpi.de/beb/doom/static:latest
+
+build_static:
+  stage: build_static
+  image: registry.gitlab.hpi.de/beb/doom/static
+  before_script:
+    - export CCACHE_BASEDIR="$PWD"
+    - export CCACHE_DIR="$PWD/ccache"
+    - export CCACHE_COMPILERCHECK=content
+    - ccache --zero-stats || true
+    - ccache --show-stats || true
+  script:
+    - cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DDOOM_STATIC=ON -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+    - cmake --build build -j4
+  after_script:
+    - export CCACHE_DIR="$PWD/ccache"
+    - ccache --show-stats || true
+  cache:
+    - key: static_build_dependencies
+      paths:
+        - build/_deps/
+    - key: static_build_cache
+      paths:
+        - ccache/
+  artifacts:
+    paths:
+      - build/src/doom

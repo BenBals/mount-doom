@@ -1,6 +1,12 @@
 # Mount Doom
 By Armin Wells, Ben Bals, Davis Issac, Jonas Schmidt, Katrin Casel, Leo Wendt, Niko Hastrich, Otto Kißig, Robin Wersich, Sebastian Angrick, and Theresa Hradilak.
 
+Mount Doom is an exact solver for directed feedback vertex set.
+
+We approach this problem by first exhaustively applying a set of reduction rules to obtain a potentially smaller kernel. In order to find a minimum DFVS on this remaining kernel, we solve a series of derived Vertex Cover instances.
+
+It was created as part of Hasso Plattner Institute's participation of the [2022 PACE Challenge](https://pacechallenge.org/2022/).
+
 [Hasso Plattner Institute](https://hpi.de) / Uni Potsdam
 [mount-doom@lists.myhpi.de](mailto:mount-doom@lists.myhpi.de)
 
@@ -14,20 +20,21 @@ You can use nix to get your toolchain (compiler + cmake).
 2. [Setup nix flakes](https://nixos.wiki/wiki/Flakes).
 3. Simply run `nix develop` to get a shell you can work in.
 
+## Manual installation
+You need a modern `gcc` and `cmake` and install the boost development libaries for your system (e.g. `boost-dev` on Apline).
+
 ## Configure the build
+```shell
+cmake -S . -B build-release-static -DCMAKE_BUILD_TYPE=Release -DDOOM_STATIC=ON
+```
 
-1. `mkdir build && cd build` # create a build directory
-2. `cmake -DCMAKE_BUILD_TYPE=Debug ..` # replace Debug with Release if you want -O3
-
-- During configuration, your `CXX` environment variable should contain your compiler.
-- All dependencies are dynamically fetched as sources by CMake.
+- Remove `-DDOOM_STATIC=ON` to build a dynamic executable
+- All dependencies (except doom) are dynamically fetched as sources by CMake.
 
 ## Compile the project
-
-From inside the `build` directory, run ~make~.
+Run  `cmake --build build -j4 --target doom`
 
 ## Run the tests
-
 From inside the `build` directory, run ~ctest~.
 
 ## CLion
@@ -46,6 +53,8 @@ worked for us:
 
 - Install boost manually (e.g. `brew install boost`).
 
-# Formatting
+# Solver Description
+Can be found the `main` branch.
 
+# Formatting
 - You can use the `scripts/format.sh` script to format everything in the project.

@@ -7,3 +7,5 @@ heuristic sister Orodruin lives on the `heuristic` branch.
 
 Both solvers are available under GPLv3.
 
+You can find the [exact](https://github.com/BenBals/mount-doom-description/raw/main/exact.pdf) and [heuristic](https://github.com/BenBals/mount-doom-description/raw/main/heuristic.pdf) solver descriptions in their [github repo](https://github.com/BenBals/mount-doom-description).
+

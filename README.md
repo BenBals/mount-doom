@@ -18,7 +18,7 @@ You can use nix to get your toolchain (compiler + cmake).
 
 1. [Install nix](https://nixos.org/download.html).
 2. [Setup nix flakes](https://nixos.wiki/wiki/Flakes).
-3. Simply run `nix develop` to get a shell you can work in. Alternatively, use `nix develop .#static` to get an environment in which to build static binaries.
+3. Simply run `nix develop .#static` to get a shell you can work in. Alternatively, use `nix develop` to get an environment in which to build dynamic executables.
 
 ## Manual installation
 You need a modern `gcc` and `cmake` and install the boost development libaries for your system (e.g. `boost-dev` on Apline).
